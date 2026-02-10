@@ -54,7 +54,7 @@ def send_post(text, image_url=None):
 if __name__ == "__main__":
     result = get_news()
 if result is None:
-    print("⏭ Пропуск запуска — нет новостей")
+    print("⏭ Нет новостей")
     exit(0)
 
 text, image = result
