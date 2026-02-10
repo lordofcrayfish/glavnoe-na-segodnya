@@ -5,8 +5,8 @@ import os
 import sys
 
 # === ENV ===
-BOT_TOKEN = os.getenv("8337666957:AAF0zVUZ-jiWcoi1QYjS59Bo3CKla33H0sY")
-CHAT_ID = os.getenv("1003897211686")
+BOT_TOKEN = os.getenv(8337666957:AAF0zVUZ-jiWcoi1QYjS59Bo3CKla33H0sY)
+CHAT_ID = os.getenv(1003897211686)
 
 if not BOT_TOKEN or not CHAT_ID:
     print("❌ BOT_TOKEN или CHAT_ID не заданы")
