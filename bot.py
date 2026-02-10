@@ -17,8 +17,13 @@ RSS_FEEDS = [
 
 def get_news():
     feed_url = random.choice(RSS_FEEDS)
-    feed = feedparser.parse(feed_url)
-    entry = random.choice(feed.entries)
+    feed = feedparser.parse(URL)
+
+if not feed.entries:
+    print("❌ RSS пустой или не загрузился")
+    return None, None
+
+entry = random.choice(feed.entries)
 
     title = entry.title
     summary = entry.summary if 'summary' in entry else ''
@@ -52,5 +57,10 @@ def send_post(text, image_url=None):
         requests.post(url, data=data)
 
 if __name__ == "__main__":
-    text, image = get_news()
+    result = get_news()
+if result is None:
+    print("⏭ Пропуск запуска — нет новостей")
+    exit(0)
+
+text, image = result
     send_post(text, image)
