@@ -2,7 +2,7 @@ name: Telegram News Bot
 
 on:
   schedule:
-    - cron: "0 6,12,18 * * *" # Runs at 06:00, 12:00 and 18:00
+    - cron: "0 * * * *"  # каждый час
   workflow_dispatch:
 
 jobs:
