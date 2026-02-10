@@ -16,27 +16,22 @@ RSS_FEEDS = [
 ]
 
 def get_news():
-    feed_url = random.choice(RSS_FEEDS)
-    feed = feedparser.parse(URL)
+    feed = feedparser.parse(RSS_URL)
 
-if not feed.entries:
-    print("❌ RSS пустой или не загрузился")
-    return None, None
+    if not feed.entries:
+        print("❌ RSS пустой")
+        return None
 
-entry = random.choice(feed.entries)
+    entry = random.choice(feed.entries)
 
     title = entry.title
-    summary = entry.summary if 'summary' in entry else ''
+    link = entry.link
+
     image = None
+    if "media_content" in entry:
+        image = entry.media_content[0].get("url")
 
-    if 'media_content' in entry:
-        image = entry.media_content[0].get('url')
-
-    text = (
-        f"📰 Коротко:\n{title}\n\n"
-        f"Почему это важно:\n{summary[:200]}..."
-    )
-
+    text = f"📰 {title}\n\n{link}"
     return text, image
 
 def send_post(text, image_url=None):
