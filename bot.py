@@ -1,12 +1,18 @@
 import feedparser
 import requests
 import random
-from datetime import datetime
-
 import os
-BOT_TOKEN = os.getenv("")
-CHAT_ID = os.getenv("C1003897211686D")
+import sys
 
+# === ENV ===
+BOT_TOKEN = os.getenv("8337666957:AAF0zVUZ-jiWcoi1QYjS59Bo3CKla33H0sY")
+CHAT_ID = os.getenv("1003897211686")
+
+if not BOT_TOKEN or not CHAT_ID:
+    print("❌ BOT_TOKEN или CHAT_ID не заданы")
+    sys.exit(1)
+
+# === RSS источники ===
 RSS_FEEDS = [
     "https://www.reuters.com/rssFeed/worldNews",
     "https://www.bbc.com/news/rss.xml",
@@ -16,19 +22,22 @@ RSS_FEEDS = [
 ]
 
 def get_news():
-    feed = feedparser.parse(RSS_URL)
+    rss_url = random.choice(RSS_FEEDS)
+    print(f"📡 Загружаю RSS: {rss_url}")
+
+    feed = feedparser.parse(rss_url)
 
     if not feed.entries:
-        print("❌ RSS пустой")
+        print("❌ RSS пустой или недоступен")
         return None
 
     entry = random.choice(feed.entries)
 
-    title = entry.title
-    link = entry.link
+    title = entry.get("title", "Без заголовка")
+    link = entry.get("link", "")
 
     image = None
-    if "media_content" in entry:
+    if "media_content" in entry and entry.media_content:
         image = entry.media_content[0].get("url")
 
     text = f"📰 {title}\n\n{link}"
@@ -37,25 +46,33 @@ def get_news():
 def send_post(text, image_url=None):
     if image_url:
         url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto"
-        data = {
+        payload = {
             "chat_id": CHAT_ID,
             "caption": text
         }
-        files = {"photo": image_url}
-        requests.post(url, data=data, files=files)
+        response = requests.post(url, data=payload)
     else:
         url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-        data = {
+        payload = {
             "chat_id": CHAT_ID,
             "text": text
         }
-        requests.post(url, data=data)
+        response = requests.post(url, data=payload)
+
+    if response.status_code != 200:
+        print("❌ Ошибка Telegram:", response.text)
+    else:
+        print("✅ Пост отправлен")
+
+def main():
+    result = get_news()
+
+    if result is None:
+        print("⏭ Нет новостей — выходим без ошибки")
+        return
+
+    text, image = result
+    send_post(text, image)
 
 if __name__ == "__main__":
-    result = get_news()
-if result is None:
-    print("⏭ Нет новостей")
-    exit(0)
-
-text, image = result
-    send_post(text, image)
+    main()
