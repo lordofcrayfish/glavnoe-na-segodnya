@@ -6,7 +6,7 @@ import sys
 
 # === ENV ===
 BOT_TOKEN = "8337666957:AAF0zVUZ-jiWcoi1QYjS59Bo3CK1a33H0sY"
-CHAT_ID = "1003897211686"
+CHAT_ID = "-1003897211686"
 
 if not BOT_TOKEN or not CHAT_ID:
     print("❌ BOT_TOKEN или CHAT_ID не заданы")
