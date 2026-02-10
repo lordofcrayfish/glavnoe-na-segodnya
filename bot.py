@@ -11,6 +11,14 @@ CHAT_ID = "-1003897211686"
 if not BOT_TOKEN or not CHAT_ID:
     print("❌ BOT_TOKEN или CHAT_ID не заданы")
     sys.exit(1)
+    
+requests.post(
+    f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
+    data={
+        "chat_id": CHAT_ID,
+        "text": "✅ Бот жив и может писать в канал"
+    }
+)
 
 # === RSS источники ===
 RSS_FEEDS = [
