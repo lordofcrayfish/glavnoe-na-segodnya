@@ -4,7 +4,7 @@ import random
 from datetime import datetime
 
 import os
-BOT_TOKEN = os.getenv("B8337666957:AAHsewVFCkroOm6kvOPPeJZQump4flReuZs")
+BOT_TOKEN = os.getenv("")
 CHAT_ID = os.getenv("C1003897211686D")
 
 RSS_FEEDS = [
