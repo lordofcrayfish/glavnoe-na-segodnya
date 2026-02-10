@@ -3,6 +3,13 @@ import requests
 import random
 import os
 import sys
+import re
+
+def is_russian(text):
+    if not text:
+        return False
+    letters = re.findall(r"[а-яА-ЯёЁ]", text)
+    return len(letters) / max(len(text), 1) > 0.3
 
 # === ENV ===
 BOT_TOKEN = os.getenv("BOT_TOKEN")
@@ -12,25 +19,12 @@ if not BOT_TOKEN or not CHAT_ID:
     print("❌ BOT_TOKEN или CHAT_ID не заданы")
     sys.exit(1)
 
-# === TEST MESSAGE ===
-r = requests.post(
-    f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
-    data={
-        "chat_id": CHAT_ID,
-        "text": "🟢 Бот запустился и может писать в канал"
-    }
-)
-
-print("Telegram status:", r.status_code)
-print("Telegram response:", r.text)
-
 # === RSS источники ===
 RSS_FEEDS = [
-    "https://www.reuters.com/rssFeed/worldNews",
-    "https://www.bbc.com/news/rss.xml",
+    "https://lenta.ru/rss",
     "https://www.rbc.ru/rss/news",
-    "https://tass.ru/rss/v2.xml",
-    "https://techcrunch.com/feed/"
+    "https://ria.ru/export/rss2/archive/index.xml",
+    "https://tass.ru/rss/v2.xml"
 ]
 
 def get_news():
