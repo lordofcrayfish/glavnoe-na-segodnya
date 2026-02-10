@@ -11,14 +11,18 @@ CHAT_ID = os.getenv("CHAT_ID")
 if not BOT_TOKEN or not CHAT_ID:
     print("❌ BOT_TOKEN или CHAT_ID не заданы")
     sys.exit(1)
-    
-requests.post(
+
+# === TEST MESSAGE ===
+r = requests.post(
     f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
     data={
         "chat_id": CHAT_ID,
-        "text": "✅ Бот жив и может писать в канал"
+        "text": "🟢 Бот запустился и может писать в канал"
     }
 )
+
+print("Telegram status:", r.status_code)
+print("Telegram response:", r.text)
 
 # === RSS источники ===
 RSS_FEEDS = [
