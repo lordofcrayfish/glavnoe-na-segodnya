@@ -174,5 +174,6 @@ def night_block():
     return 1 <= hour <= 7
 
 if __name__ == "__main__":
-    t, i = get_news()
-    send(t, i)
+    if not night_block():
+        t, i = get_news()
+        send(t, i)
