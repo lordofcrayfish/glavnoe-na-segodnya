@@ -57,7 +57,30 @@ def clean(text):
 
 def important_score(text):
     score = 0
-    text = text.lower()
+    t = text.lower()
+
+    strong = [
+        "войн","санкц","президент","кризис","обвал","чп",
+        "теракт","конфликт","нато","мобилизац","закон",
+        "breaking","urgent","major","war","crash","collapse"
+    ]
+
+    medium = [
+        "рынок","эконом","доллар","рост","падение",
+        "ai","искусствен","технолог","компания"
+    ]
+
+    for w in strong:
+        if w in t:
+            score += 5
+
+    for w in medium:
+        if w in t:
+            score += 2
+
+    score += len(t)//300
+
+    return score
 
     for word in IMPORTANT_WORDS:
         if word in text:
@@ -146,6 +169,9 @@ def send(text, img=None):
         }
         requests.post(url, data=data)
 
+def night_block():
+    hour = datetime.utcnow().hour + 3
+    return 1 <= hour <= 7
 
 if __name__ == "__main__":
     t, i = get_news()
