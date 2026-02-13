@@ -3,9 +3,13 @@ import requests
 import random
 import os
 import re
+import json
+from datetime import datetime
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
+
+DB_FILE = "posted.json"
 
 RSS_FEEDS = [
     "https://www.reuters.com/rssFeed/topNews",
@@ -20,68 +24,112 @@ RSS_FEEDS = [
 ]
 
 IMPORTANT_WORDS = [
-    "war","санкц","президент","crisis","запрет","закон",
-    "войн","конфликт","обвал","рост","падение",
-    "AI","искусствен","рынок","доллар","эконом",
-    "breaking","urgent","срочно","главное"
+    "войн","санкц","президент","закон","кризис","обвал",
+    "рост","падение","доллар","эконом","конфликт","нато",
+    "ai","искусствен","рынок","скандал","запрет",
+    "breaking","urgent","major","crisis","war"
+]
+
+ANALYSIS_PHRASES = [
+    "Событие может повлиять на расстановку сил.",
+    "Эксперты ожидают последствия в ближайшее время.",
+    "Ситуация способна изменить текущую повестку.",
+    "Это может отразиться на рынках и политике.",
+    "Развитие событий может оказаться ключевым."
 ]
 
 
+def load_db():
+    if os.path.exists(DB_FILE):
+        with open(DB_FILE, "r") as f:
+            return json.load(f)
+    return []
+
+
+def save_db(data):
+    with open(DB_FILE, "w") as f:
+        json.dump(data, f)
+
+
 def clean(text):
-    text = re.sub("<.*?>", "", text)
-    return text.strip()
+    return re.sub("<.*?>", "", text).strip()
 
 
-def is_important(text):
+def important_score(text):
+    score = 0
     text = text.lower()
-    return any(word in text for word in IMPORTANT_WORDS)
+
+    for word in IMPORTANT_WORDS:
+        if word in text:
+            score += 2
+
+    score += len(text) // 200
+    return score
 
 
 def get_news():
+    posted = load_db()
     random.shuffle(RSS_FEEDS)
 
-    for feed_url in RSS_FEEDS:
-        feed = feedparser.parse(feed_url)
+    best = None
+    best_score = 0
 
-        for entry in feed.entries[:5]:
+    for url in RSS_FEEDS:
+        feed = feedparser.parse(url)
+
+        for entry in feed.entries[:7]:
 
             title = clean(entry.title)
             summary = clean(entry.summary if "summary" in entry else "")
 
-            combined = title + " " + summary
-
-            if not is_important(combined):
+            if title in posted:
                 continue
 
-            image = None
+            text = title + " " + summary
+            score = important_score(text)
 
-            if "media_content" in entry:
-                image = entry.media_content[0].get("url")
+            if score > best_score:
+                best_score = score
+                best = entry
 
-            if not image and "links" in entry:
-                for link in entry.links:
-                    if "image" in link.type:
-                        image = link.href
+    if not best or best_score < 2:
+        return None, None
 
-            text = f"""
+    title = clean(best.title)
+    summary = clean(best.summary if "summary" in best else "")
+
+    image = None
+
+    if "media_content" in best:
+        image = best.media_content[0].get("url")
+
+    if not image and "links" in best:
+        for link in best.links:
+            if "image" in link.type:
+                image = link.href
+
+    analysis = random.choice(ANALYSIS_PHRASES)
+
+    text = f"""
 📰 *{title}*
 
-{summary[:700]}
+{summary[:900]}
 
 📊 *Почему это важно:*  
-Новость влияет на текущую ситуацию и может иметь последствия. Следим за развитием.
+{analysis}
 """
 
-            return text.strip(), image
+    posted.append(title)
+    save_db(posted)
 
-    return None, None
+    return text.strip(), image
 
 
-def send_post(text, image_url=None):
+def send(text, img=None):
     if not text:
         return
 
-    if image_url:
+    if img:
         url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto"
         data = {
             "chat_id": CHAT_ID,
@@ -100,5 +148,5 @@ def send_post(text, image_url=None):
 
 
 if __name__ == "__main__":
-    text, image = get_news()
-    send_post(text, image)
+    t, i = get_news()
+    send(t, i)
