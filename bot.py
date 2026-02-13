@@ -2,83 +2,103 @@ import feedparser
 import requests
 import random
 import os
-import sys
 import re
 
-def is_russian(text):
-    if not text:
-        return False
-    letters = re.findall(r"[а-яА-ЯёЁ]", text)
-    return len(letters) / max(len(text), 1) > 0.3
-
-# === ENV ===
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
 
-if not BOT_TOKEN or not CHAT_ID:
-    print("❌ BOT_TOKEN или CHAT_ID не заданы")
-    sys.exit(1)
-
-# === RSS источники ===
 RSS_FEEDS = [
-    "https://lenta.ru/rss",
+    "https://www.reuters.com/rssFeed/topNews",
+    "https://feeds.bbci.co.uk/news/rss.xml",
+    "https://www.theguardian.com/world/rss",
+    "https://www.ft.com/rss/home",
     "https://www.rbc.ru/rss/news",
-    "https://ria.ru/export/rss2/archive/index.xml",
-    "https://tass.ru/rss/v2.xml"
+    "https://tass.ru/rss/v2.xml",
+    "https://meduza.io/rss/all",
+    "https://techcrunch.com/feed/",
+    "https://www.theverge.com/rss/index.xml"
 ]
 
+IMPORTANT_WORDS = [
+    "war","санкц","президент","crisis","запрет","закон",
+    "войн","конфликт","обвал","рост","падение",
+    "AI","искусствен","рынок","доллар","эконом",
+    "breaking","urgent","срочно","главное"
+]
+
+
+def clean(text):
+    text = re.sub("<.*?>", "", text)
+    return text.strip()
+
+
+def is_important(text):
+    text = text.lower()
+    return any(word in text for word in IMPORTANT_WORDS)
+
+
 def get_news():
-    rss_url = random.choice(RSS_FEEDS)
-    print(f"📡 Загружаю RSS: {rss_url}")
+    random.shuffle(RSS_FEEDS)
 
-    feed = feedparser.parse(rss_url)
+    for feed_url in RSS_FEEDS:
+        feed = feedparser.parse(feed_url)
 
-    if not feed.entries:
-        print("❌ RSS пустой или недоступен")
-        return None
+        for entry in feed.entries[:5]:
 
-    entry = random.choice(feed.entries)
+            title = clean(entry.title)
+            summary = clean(entry.summary if "summary" in entry else "")
 
-    title = entry.get("title", "Без заголовка")
-    link = entry.get("link", "")
+            combined = title + " " + summary
 
-    image = None
-    if "media_content" in entry and entry.media_content:
-        image = entry.media_content[0].get("url")
+            if not is_important(combined):
+                continue
 
-    text = f"📰 {title}\n\n{link}"
-    return text, image
+            image = None
+
+            if "media_content" in entry:
+                image = entry.media_content[0].get("url")
+
+            if not image and "links" in entry:
+                for link in entry.links:
+                    if "image" in link.type:
+                        image = link.href
+
+            text = f"""
+📰 *{title}*
+
+{summary[:700]}
+
+📊 *Почему это важно:*  
+Новость влияет на текущую ситуацию и может иметь последствия. Следим за развитием.
+"""
+
+            return text.strip(), image
+
+    return None, None
+
 
 def send_post(text, image_url=None):
-    if image_url:
-        url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto"
-        payload = {
-            "chat_id": CHAT_ID,
-            "caption": text
-        }
-        response = requests.post(url, data=payload)
-    else:
-        url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-        payload = {
-            "chat_id": CHAT_ID,
-            "text": text
-        }
-        response = requests.post(url, data=payload)
-
-    if response.status_code != 200:
-        print("❌ Ошибка Telegram:", response.text)
-    else:
-        print("✅ Пост отправлен")
-
-def main():
-    result = get_news()
-
-    if result is None:
-        print("⏭ Нет новостей — выходим без ошибки")
+    if not text:
         return
 
-    text, image = result
-    send_post(text, image)
+    if image_url:
+        url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto"
+        data = {
+            "chat_id": CHAT_ID,
+            "caption": text,
+            "parse_mode": "Markdown"
+        }
+        requests.post(url, data=data)
+    else:
+        url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+        data = {
+            "chat_id": CHAT_ID,
+            "text": text,
+            "parse_mode": "Markdown"
+        }
+        requests.post(url, data=data)
+
 
 if __name__ == "__main__":
-    main()
+    text, image = get_news()
+    send_post(text, image)
