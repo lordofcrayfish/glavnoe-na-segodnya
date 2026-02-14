@@ -24,24 +24,24 @@ EMOJIS = ["⚡️","🌍","📊","🚨","💰","📉","📈"]
 STRONG = [
     "войн","теракт","кризис","санкц","президент",
     "закон","конфликт","нато","обвал","чп",
-    "war","attack","crisis","breaking"
+    "war","attack","crisis","breaking","urgent"
 ]
 
 
+# ---------- база ----------
 def load():
     if os.path.exists(DB):
         return json.load(open(DB))
     return []
 
-
 def save(d):
-    json.dump(d,open(DB,"w"))
-
+    json.dump(d, open(DB,"w"))
 
 def clean(t):
     return re.sub("<.*?>","",t)
 
 
+# ---------- важность ----------
 def score(text):
     t=text.lower()
     s=0
@@ -52,6 +52,7 @@ def score(text):
     return s
 
 
+# ---------- перевод ----------
 def translate(text):
     try:
         url="https://translate.googleapis.com/translate_a/single"
@@ -62,13 +63,33 @@ def translate(text):
             "dt":"t",
             "q":text
         }
-        r=requests.get(url,params=params).json()
+        r=requests.get(url,params=params,timeout=5).json()
         return r[0][0][0]
     except:
         return text
 
 
-def get_image(entry):
+# ---------- HD картинка ----------
+def get_full_image(url):
+    try:
+        html=requests.get(url,timeout=6).text
+
+        match=re.search(r'property="og:image" content="(.*?)"',html)
+        if match:
+            return match.group(1)
+
+        match=re.search(r'name="twitter:image" content="(.*?)"',html)
+        if match:
+            return match.group(1)
+
+    except:
+        return None
+
+    return None
+
+
+# fallback картинка из RSS
+def get_rss_image(entry):
 
     if "media_content" in entry:
         return entry.media_content[0]["url"]
@@ -81,6 +102,7 @@ def get_image(entry):
     return None
 
 
+# ---------- генерация поста ----------
 def make_post(title,summary):
     emoji=random.choice(EMOJIS)
 
@@ -93,6 +115,7 @@ def make_post(title,summary):
 """.strip()
 
 
+# ---------- сбор новостей ----------
 def get_news():
 
     posted=load()
@@ -115,13 +138,14 @@ def get_news():
             title_ru=translate(title)
             summary_ru=translate(summary)
 
-            img=get_image(e)
+            img=get_full_image(e.link) or get_rss_image(e)
 
             results.append((title,title_ru,summary_ru,img))
 
     return results[:5]
 
 
+# ---------- отправка ----------
 def send(text,img):
 
     if img:
@@ -141,10 +165,10 @@ def send(text,img):
         })
 
 
+# ---------- запуск ----------
 if __name__=="__main__":
 
     news=get_news()
-
     posted=load()
 
     for orig,title,summary,img in news:
