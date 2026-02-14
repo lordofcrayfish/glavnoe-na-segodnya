@@ -4,6 +4,8 @@ import random
 import os
 import re
 import json
+import io
+from PIL import Image, ImageDraw, ImageFont
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
@@ -11,7 +13,6 @@ CHAT_ID = os.getenv("CHAT_ID")
 DB = "posted.json"
 
 RSS = [
-    "https://www.reuters.com/rssFeed/topNews",
     "https://feeds.bbci.co.uk/news/rss.xml",
     "https://www.theguardian.com/world/rss",
     "https://meduza.io/rss/all",
@@ -28,7 +29,7 @@ STRONG = [
 ]
 
 
-# ---------- база ----------
+# ---------------- база ----------------
 def load():
     if os.path.exists(DB):
         return json.load(open(DB))
@@ -41,7 +42,7 @@ def clean(t):
     return re.sub("<.*?>","",t)
 
 
-# ---------- важность ----------
+# ---------------- важность ----------------
 def score(text):
     t=text.lower()
     s=0
@@ -52,35 +53,37 @@ def score(text):
     return s
 
 
-# ---------- перевод ----------
+# ---------------- перевод ----------------
 def translate(text):
     try:
-        url="https://translate.googleapis.com/translate_a/single"
-        params={
-            "client":"gtx",
-            "sl":"auto",
-            "tl":"ru",
-            "dt":"t",
-            "q":text
-        }
-        r=requests.get(url,params=params,timeout=5).json()
+        r=requests.get(
+            "https://translate.googleapis.com/translate_a/single",
+            params={
+                "client":"gtx",
+                "sl":"auto",
+                "tl":"ru",
+                "dt":"t",
+                "q":text
+            },
+            timeout=5
+        ).json()
         return r[0][0][0]
     except:
         return text
 
 
-# ---------- HD картинка ----------
+# ---------------- HD картинка ----------------
 def get_full_image(url):
     try:
         html=requests.get(url,timeout=6).text
 
-        match=re.search(r'property="og:image" content="(.*?)"',html)
-        if match:
-            return match.group(1)
+        og=re.search(r'property="og:image" content="(.*?)"',html)
+        if og:
+            return og.group(1)
 
-        match=re.search(r'name="twitter:image" content="(.*?)"',html)
-        if match:
-            return match.group(1)
+        tw=re.search(r'name="twitter:image" content="(.*?)"',html)
+        if tw:
+            return tw.group(1)
 
     except:
         return None
@@ -88,7 +91,6 @@ def get_full_image(url):
     return None
 
 
-# fallback картинка из RSS
 def get_rss_image(entry):
 
     if "media_content" in entry:
@@ -102,29 +104,67 @@ def get_rss_image(entry):
     return None
 
 
-# ---------- генерация поста ----------
+# ---------------- брендирование изображения ----------------
+def brand_image(url):
+
+    try:
+        r=requests.get(url,timeout=10)
+        img=Image.open(io.BytesIO(r.content)).convert("RGB")
+
+        draw=ImageDraw.Draw(img)
+        text="ГЛАВНОЕ СЕГОДНЯ"
+
+        size=int(img.width/18)
+
+        try:
+            font=ImageFont.truetype("DejaVuSans-Bold.ttf",size)
+        except:
+            font=ImageFont.load_default()
+
+        w,h=draw.textsize(text,font=font)
+
+        x=img.width-w-20
+        y=img.height-h-20
+
+        draw.rectangle((x-15,y-10,x+w+15,y+h+10),fill=(0,0,0))
+        draw.text((x,y),text,font=font,fill=(255,255,255))
+
+        path="temp.jpg"
+        img.save(path,quality=95)
+
+        return path
+
+    except:
+        return None
+
+
+# ---------------- пост ----------------
 def make_post(title,summary):
     emoji=random.choice(EMOJIS)
 
     return f"""
 {emoji} <b>{title}</b>
 
-{summary[:800]}
+{summary[:700]}
 
 <b>Почему это важно:</b> событие может повлиять на ситуацию дальше.
 """.strip()
 
 
-# ---------- сбор новостей ----------
+# ---------------- сбор новостей ----------------
 def get_news():
 
     posted=load()
     results=[]
 
     for url in RSS:
-        feed=feedparser.parse(url)
 
-        for e in feed.entries[:7]:
+        try:
+            feed=feedparser.parse(url)
+        except:
+            continue
+
+        for e in feed.entries[:8]:
 
             title=clean(e.title)
             summary=clean(e.summary if "summary" in e else "")
@@ -145,27 +185,35 @@ def get_news():
     return results[:5]
 
 
-# ---------- отправка ----------
+# ---------------- отправка ----------------
 def send(text,img):
 
-    if img:
-        url=f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto"
-        requests.post(url,data={
-            "chat_id":CHAT_ID,
-            "caption":text,
-            "parse_mode":"HTML",
-            "photo":img
-        })
-    else:
-        url=f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-        requests.post(url,data={
-            "chat_id":CHAT_ID,
-            "text":text,
-            "parse_mode":"HTML"
-        })
+    try:
+
+        if img:
+            img=brand_image(img) or img
+
+            url=f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto"
+            requests.post(url,data={
+                "chat_id":CHAT_ID,
+                "caption":text,
+                "parse_mode":"HTML",
+                "photo":img
+            },timeout=10)
+
+        else:
+            url=f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+            requests.post(url,data={
+                "chat_id":CHAT_ID,
+                "text":text,
+                "parse_mode":"HTML"
+            },timeout=10)
+
+    except:
+        pass
 
 
-# ---------- запуск ----------
+# ---------------- запуск ----------------
 if __name__=="__main__":
 
     news=get_news()
