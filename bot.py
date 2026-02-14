@@ -4,176 +4,154 @@ import random
 import os
 import re
 import json
-from datetime import datetime
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
 
-DB_FILE = "posted.json"
+DB = "posted.json"
 
-RSS_FEEDS = [
+RSS = [
     "https://www.reuters.com/rssFeed/topNews",
     "https://feeds.bbci.co.uk/news/rss.xml",
     "https://www.theguardian.com/world/rss",
-    "https://www.ft.com/rss/home",
-    "https://www.rbc.ru/rss/news",
-    "https://tass.ru/rss/v2.xml",
     "https://meduza.io/rss/all",
-    "https://techcrunch.com/feed/",
-    "https://www.theverge.com/rss/index.xml"
+    "https://lenta.ru/rss/news",
+    "https://tass.ru/rss/v2.xml"
 ]
 
-IMPORTANT_WORDS = [
-    "войн","санкц","президент","закон","кризис","обвал",
-    "рост","падение","доллар","эконом","конфликт","нато",
-    "ai","искусствен","рынок","скандал","запрет",
-    "breaking","urgent","major","crisis","war"
-]
+EMOJIS = ["⚡️","🌍","📊","🚨","💰","📉","📈"]
 
-ANALYSIS_PHRASES = [
-    "Событие может повлиять на расстановку сил.",
-    "Эксперты ожидают последствия в ближайшее время.",
-    "Ситуация способна изменить текущую повестку.",
-    "Это может отразиться на рынках и политике.",
-    "Развитие событий может оказаться ключевым."
+STRONG = [
+    "войн","теракт","кризис","санкц","президент",
+    "закон","конфликт","нато","обвал","чп",
+    "war","attack","crisis","breaking"
 ]
 
 
-def load_db():
-    if os.path.exists(DB_FILE):
-        with open(DB_FILE, "r") as f:
-            return json.load(f)
+def load():
+    if os.path.exists(DB):
+        return json.load(open(DB))
     return []
 
 
-def save_db(data):
-    with open(DB_FILE, "w") as f:
-        json.dump(data, f)
+def save(d):
+    json.dump(d,open(DB,"w"))
 
 
-def clean(text):
-    return re.sub("<.*?>", "", text).strip()
+def clean(t):
+    return re.sub("<.*?>","",t)
 
 
-def important_score(text):
-    score = 0
-    t = text.lower()
-
-    strong = [
-        "войн","санкц","президент","кризис","обвал","чп",
-        "теракт","конфликт","нато","мобилизац","закон",
-        "breaking","urgent","major","war","crash","collapse"
-    ]
-
-    medium = [
-        "рынок","эконом","доллар","рост","падение",
-        "ai","искусствен","технолог","компания"
-    ]
-
-    for w in strong:
+def score(text):
+    t=text.lower()
+    s=0
+    for w in STRONG:
         if w in t:
-            score += 5
+            s+=5
+    s+=len(t)//200
+    return s
 
-    for w in medium:
-        if w in t:
-            score += 2
 
-    score += len(t)//300
+def translate(text):
+    try:
+        url="https://translate.googleapis.com/translate_a/single"
+        params={
+            "client":"gtx",
+            "sl":"auto",
+            "tl":"ru",
+            "dt":"t",
+            "q":text
+        }
+        r=requests.get(url,params=params).json()
+        return r[0][0][0]
+    except:
+        return text
 
-    return score
 
-    for word in IMPORTANT_WORDS:
-        if word in text:
-            score += 2
+def get_image(entry):
 
-    score += len(text) // 200
-    return score
+    if "media_content" in entry:
+        return entry.media_content[0]["url"]
+
+    if "links" in entry:
+        for l in entry.links:
+            if "image" in l.get("type",""):
+                return l["href"]
+
+    return None
+
+
+def make_post(title,summary):
+    emoji=random.choice(EMOJIS)
+
+    return f"""
+{emoji} <b>{title}</b>
+
+{summary[:800]}
+
+<b>Почему это важно:</b> событие может повлиять на ситуацию дальше.
+""".strip()
 
 
 def get_news():
-    posted = load_db()
-    random.shuffle(RSS_FEEDS)
 
-    best = None
-    best_score = 0
+    posted=load()
+    results=[]
 
-    for url in RSS_FEEDS:
-        feed = feedparser.parse(url)
+    for url in RSS:
+        feed=feedparser.parse(url)
 
-        for entry in feed.entries[:7]:
+        for e in feed.entries[:7]:
 
-            title = clean(entry.title)
-            summary = clean(entry.summary if "summary" in entry else "")
+            title=clean(e.title)
+            summary=clean(e.summary if "summary" in e else "")
 
             if title in posted:
                 continue
 
-            text = title + " " + summary
-            score = important_score(text)
+            if score(title+summary)<3:
+                continue
 
-            if score > best_score:
-                best_score = score
-                best = entry
+            title_ru=translate(title)
+            summary_ru=translate(summary)
 
-    if not best or best_score < 2:
-        return None, None
+            img=get_image(e)
 
-    title = clean(best.title)
-    summary = clean(best.summary if "summary" in best else "")
+            results.append((title,title_ru,summary_ru,img))
 
-    image = None
-
-    if "media_content" in best:
-        image = best.media_content[0].get("url")
-
-    if not image and "links" in best:
-        for link in best.links:
-            if "image" in link.type:
-                image = link.href
-
-    analysis = random.choice(ANALYSIS_PHRASES)
-
-    text = f"""
-📰 *{title}*
-
-{summary[:900]}
-
-📊 *Почему это важно:*  
-{analysis}
-"""
-
-    posted.append(title)
-    save_db(posted)
-
-    return text.strip(), image
+    return results[:5]
 
 
-def send(text, img=None):
-    if not text:
-        return
+def send(text,img):
 
     if img:
-        url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto"
-        data = {
-            "chat_id": CHAT_ID,
-            "caption": text,
-            "parse_mode": "Markdown"
-        }
-        requests.post(url, data=data)
+        url=f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto"
+        requests.post(url,data={
+            "chat_id":CHAT_ID,
+            "caption":text,
+            "parse_mode":"HTML",
+            "photo":img
+        })
     else:
-        url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-        data = {
-            "chat_id": CHAT_ID,
-            "text": text,
-            "parse_mode": "Markdown"
-        }
-        requests.post(url, data=data)
+        url=f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+        requests.post(url,data={
+            "chat_id":CHAT_ID,
+            "text":text,
+            "parse_mode":"HTML"
+        })
 
-def night_block():
-    hour = datetime.utcnow().hour + 3
-    return 1 <= hour <= 7
 
-if __name__ == "__main__":
-    if not night_block():
-        t, i = get_news()
-        send(t, i)
+if __name__=="__main__":
+
+    news=get_news()
+
+    posted=load()
+
+    for orig,title,summary,img in news:
+
+        post=make_post(title,summary)
+        send(post,img)
+
+        posted.append(orig)
+
+    save(posted)
